@@ -15,7 +15,7 @@ export default new PrefixCommand({
 		'1113407924409221120', // epic wonderland staff
 		'1113451646031241316', // epic wonderland users
 		'839731097633423389', // blackstone users
-		'929306033367699496', // Luminescent Users
+		"1130783135156670504", // Luminescent Users
 		'871393325389844521', // Luminescent Leiutenint
 		],
 	allowedCategories: ['1147909067172483162',
@@ -74,7 +74,7 @@ export default new PrefixCommand({
 				"1135995107842195550": "1148992217202040942", //epic park
 				"801822272113082389": "807826290295570432", // epic
 				"1113339391419625572": "1113407924409221120", // epic wonderland staff
-				"871269916085452870": "1128607975972548711", // Luminescent Staff
+				"871269916085452870": "871393325389844521", // Luminescent Staff
 			};
 
 			const roleId = Object.entries(modRoleList).find(([key, val]) => key === serverId)?.[1];

@@ -16,7 +16,7 @@ export default new PrefixCommand({
 	    	         '1113451646031241316', // epic wonderland users
                     '845499229429956628', // Blackstone Staff
                     '839731097633423389', // Blackstone Users
-      '929306033367699496', // Luminescent Users
+      "1130783135156670504", // Luminescent Users
       '871393325389844521', // Luminescent Leiutenint
         ],
     allowedCategories: ['1147909067172483162',
@@ -72,7 +72,7 @@ export default new PrefixCommand({
              "1135995107842195550": "1148992217202040942", // epic park staff
              '1113339391419625572':'1113407924409221120', // epic wonderland staff
              "839731097473908767": "845499229429956628", // blackstone staff royal guards
-           "871269916085452870": "1128607975972548711", // Luminescent Staff
+           "871269916085452870": "871393325389844521", // Luminescent Staff
 
          };
 
