@@ -5,15 +5,21 @@ import {
   EmbedBuilder,
 } from "discord.js";
 import { PrefixCommand } from "../../handler";
-const { checkisland, createisland, enableevents } = require('/home/ubuntu/ep_bot/extras/functions');
+const {
+  checkisland,
+  createisland,
+  enableevents,
+  getisland,
+  updateOwner
+} = require("/home/ubuntu/ep_bot/extras/functions");
 const emojiRegex = require("emoji-regex");
 const { amarikey } = require("../../../../ep_bot/extras/settings");
 const { AmariBot } = require("amaribot.js");
 const amariclient = new AmariBot(amarikey);
 
-// Centralized config for all guilds
+// Guild-specific configurations
 const guildConfigs = {
-  "1135995107842195550": { // Epic Park
+  "1135995107842195550": {
     ownerRole: "1147864509344661644",
     staffRole: "1148992217202040942",
     boosterRole: "1142141020218347601",
@@ -26,44 +32,34 @@ const guildConfigs = {
       80: "1147909539413368883",
       120: "1147909156196593787",
     },
-    nameFormat: (emoji, name) => emoji ? `${emoji}・${name}` : `・${name}`,
+    nameFormat: (emoji, name) => (emoji ? `${emoji}・${name}` : `・${name}`),
     useAmari: true,
   },
-  "1113339391419625572": { // Epic Wonderland
+  "1113339391419625572": {
     ownerRole: "1306823581870854174",
     categories: { default: "1151855336865665024" },
-    nameFormat: (emoji, name) => emoji ? `${emoji} ⸾⸾${name}⸾⸾` : `⸾⸾${name}⸾⸾`,
+    nameFormat: (emoji, name) => (emoji ? `${emoji} ⸾⸾${name}⸾⸾` : `⸾⸾${name}⸾⸾`),
   },
-  "839731097473908767": { // Blackstone
+  "839731097473908767": {
     ownerRole: "892026418937077760",
     categories: { default: "839731102813913107" },
-    nameFormat: (emoji, name) => emoji ? `${emoji} ||${name}` : `||${name}`,
+    nameFormat: (emoji, name) => (emoji ? `${emoji} ||${name}` : `||${name}`),
   },
-  "871269916085452870": { // Luminescent
+  "871269916085452870": {
     ownerRole: "1173220944882450564",
     categories: { default: "1075868205396017152" },
-    nameFormat: (emoji, name) => emoji ? `${emoji}║${name}` : `║${name}`,
+    nameFormat: (emoji, name) => (emoji ? `${emoji}║${name}` : `║${name}`),
   },
 };
 
 export default new PrefixCommand({
   name: "assign",
-  aliases: ["ac", "assignch"],
+  aliases: ["assignch"],
   allowedGuilds: Object.keys(guildConfigs),
   allowedRoles: [
     "1148992217202040942", "807826290295570432", "1073788272452579359",
     "1113407924409221120", "845499229429956628", "871393325389844521"
   ],
-  allowedCategories:["1137072690264551604","1203928376205905960","1152037896841351258",
-    '1113414355669753907',// epic wonderland play land staff
-    '1115772256052846632', /// epic wonderland staff
-    "1113414355669753907", // blackstone staff
-    "839731098456293420", // blackstone management
-    '1128607975972548711', // Luminescent Staff
-    '890214306615021648', //luminescent mods only
-
-  ],
-
   async execute(message: Message): Promise<void> {
     try {
       if (message.channel.type !== ChannelType.GuildText) return;
@@ -72,37 +68,80 @@ export default new PrefixCommand({
       const config = guildConfigs[guildId];
       if (!config) return;
 
-      const owner = message.mentions.users.first();
-      const raw = message.content.split("#")[1];
+      const args = message.content.trim().split(/\s+/);
 
-      if (!owner) {
-        await message.reply("❌ Please mention a valid user.");
+      // 🧑 Extract user mention or ID
+      const userToken = args.find(arg =>
+        !/^<#\d+>$/.test(arg) &&
+        (/^<@!?(\d+)>$/.test(arg) || /^\d{17,20}$/.test(arg))
+      );
+      const userId = userToken?.match(/\d{17,20}/)?.[0];
+      if (!userId) {
+        await message.reply("❌ Please mention a valid user or provide a valid ID.");
         return;
       }
-      if (!raw) {
-        await message.reply("❌ Usage: `assign @user # emoji channelname`");
+
+      let owner;
+      try {
+        owner = await message.client.users.fetch(userId);
+        console.log(`[ASSIGN] Resolved userId: ${userId}, Owner: ${owner?.tag}`);
+      } catch {
+        await message.reply("❌ Could not resolve the user from ID.");
         return;
       }
 
-      const emojiMatch = [...raw.matchAll(emojiRegex())];
-      const emoji = emojiMatch.length > 0 ? emojiMatch[0][0] : null;
-      const channelWord = emoji ? raw.split(emoji)[1]?.trimStart() : raw.trim();
-      const finalName = config.nameFormat(emoji, channelWord);
-      const existingChannel = message.guild.channels.cache.find(c => c.name === finalName);
+      const userIndex = args.findIndex(arg => arg === userToken);
+      const potentialArgs = args.slice(userIndex + 1);
+
+      const mentionedChannel = message.mentions.channels.first();
+      let channel: TextChannel | undefined;
+      let finalName: string | undefined;
+
+      if (mentionedChannel) {
+        channel = mentionedChannel as TextChannel;
+        finalName = channel.name;
+      } else {
+        const rawArgs = potentialArgs
+          .filter(arg => !/^<#\d+>$/.test(arg))
+          .join(" ");
+
+        if (!rawArgs) {
+          await message.reply("❌ Usage: assign <userId or mention> emoji channelname");
+          return;
+        }
+
+        const emojiMatch = [...rawArgs.matchAll(emojiRegex())];
+        const emoji = emojiMatch.length > 0 ? emojiMatch[0][0] : null;
+        const channelWord = emoji ? rawArgs.split(emoji)[1]?.trimStart() : rawArgs.trim();
+        finalName = config.nameFormat(emoji, channelWord);
+
+        if (!channelWord || finalName.length === 0) {
+          await message.reply("❌ Please include a valid emoji and channel name.");
+          return;
+        }
+
+        channel = message.guild.channels.cache.find(c => c.name === finalName) as TextChannel;
+      }
+
       const progressBar = await message.channel.send("=>..");
 
-      let channel = existingChannel as TextChannel;
+      // 📦 Create new channel if it doesn't exist
       if (!channel) {
-        // Create new channel
-        const parent = config.categories.default;
         channel = await message.guild.channels.create({
-          name: finalName,
+          name: finalName!,
           type: ChannelType.GuildText,
-          parent,
+          parent: config.categories.default,
         });
       }
 
-      // Amari level logic
+      let dbInfo = await getisland(channel.id);
+      if (!dbInfo) {
+        await createisland(owner.id, channel.id);
+      } else if (dbInfo.user !== owner.id) {
+        await updateOwner(owner.id, channel.id);
+      }
+
+      // 🎚️ Amari logic
       let level = 0;
       if (config.useAmari) {
         try {
@@ -113,7 +152,7 @@ export default new PrefixCommand({
         }
       }
 
-      // Re-assign category if needed
+      // 📁 Category assignment
       if (config.categories) {
         if (config.useAmari && level >= 120 && config.categories[120]) {
           await channel.setParent(config.categories[120]);
@@ -133,16 +172,15 @@ export default new PrefixCommand({
         SendMessages: true,
         ViewChannel: true,
       });
-      await progressBar.edit("========>...");
 
-      const dbResult = await createisland(owner.id, channel.id, guildId);
-      if (dbResult === "Created!") {
-        await enableevents(channel.id);
-        const member = message.guild.members.cache.get(owner.id);
-        if (member && config.ownerRole) {
-          await member.roles.add(config.ownerRole);
-        }
+      await enableevents(channel.id);
+
+      const member = message.guild.members.cache.get(owner.id);
+      if (member && config.ownerRole) {
+        await member.roles.add(config.ownerRole).catch(() => {});
       }
+
+      await progressBar.edit("========>...");
 
       const embed = new EmbedBuilder()
         .setTitle("✅ Channel Assigned")
@@ -150,16 +188,16 @@ export default new PrefixCommand({
         .setColor("#097969");
 
       await message.reply({ embeds: [embed] });
+
       await channel.send({
         embeds: [
           new EmbedBuilder()
             .setTitle("📌 Channel Info")
             .setDescription(`<@!${owner.id}> now owns this channel.\nUse \`ep help\` for commands.`)
-            .addFields({
-              name: "Created At", value: new Date().toLocaleString(), inline: true
-            }, {
-              name: "Created By", value: `<@${message.author.id}>`, inline: true
-            })
+            .addFields(
+              { name: "Created At", value: new Date().toLocaleString(), inline: true },
+              { name: "Created By", value: `<@${message.author.id}>`, inline: true }
+            )
         ]
       });
 
