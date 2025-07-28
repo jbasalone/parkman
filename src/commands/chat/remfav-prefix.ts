@@ -17,29 +17,57 @@ export default new PrefixCommand({
 					'1113451646031241316', // epic wonderland users
 					'845499229429956628', // Blackstone Staff
 					'839731097633423389', // Blackstone Users
-		"1130783135156670504", // Luminescent Users
-		'871393325389844521', // Luminescent Leiutenint
+		      '1130783135156670504', // Luminescent Users
+		      '871393325389844521', // Luminescent Leiutenint
 				],
-    async execute(message: Message): Promise<void> {
-	try{
-	    if (!message.mentions.channels.map(m => m).length) {
-		    await message.reply('Did you forget to add the channel?')
-		    return;
-	    }
-	    let channelName = message.content.replace(/\D/g, '')
-	    let user = message.author.id
-	    const favoritedChannels = await checkfav(message.author.id);
-	    // @ts-ignore
-	    const isFavorite = favoritedChannels.some((fav) => fav.channel === channelName)
-	    if(!isFavorite) {
-		    await message.reply('Channel not marked as favorite')
-		    return;
-	    } else {
-	    	await remfav(user, channelName)
-	    	await message.reply(`<#${channelName}> has been removed from favorites`)
-	    }
-	}catch(err)
-  	{console.log(err)}
+  async execute(message: Message): Promise<void> {
+    try {
+      console.log('remfav command called:', message.content);
 
-    },
+      const parts = message.content.trim().split(/\s+/);
+
+      // Get all mentioned channel IDs
+      const mentionedIds = message.mentions.channels.map(ch => ch.id);
+
+      // Get all raw channel IDs from arguments (skip the prefix/command)
+      const rawIds = parts
+        .filter(part => /^\d{17,19}$/.test(part))
+        // Don't double count mentions
+        .filter(id => !mentionedIds.includes(id));
+
+      // Combine and dedupe
+      const allChannelIds = [...new Set([...mentionedIds, ...rawIds])];
+
+      if (!allChannelIds.length) {
+        await message.reply('Please mention at least one channel or provide channel IDs to remove.');
+        return;
+      }
+
+      const favoritedChannels = await checkfav(message.author.id);
+      const favSet = new Set(favoritedChannels.map(fav => fav.channel));
+
+      const removed = [];
+      const notFound = [];
+
+      for (const channelId of allChannelIds) {
+        if (favSet.has(channelId)) {
+          await remfav(message.author.id, channelId);
+          removed.push(channelId);
+        } else {
+          notFound.push(channelId);
+        }
+      }
+
+      let replyMsg = '';
+      if (removed.length)
+        replyMsg += `✅ Removed from favorites: ${removed.map(id => `<#${id}> (\`${id}\`)`).join(', ')}\n`;
+      if (notFound.length)
+        replyMsg += `⚠️ Not marked as favorite: ${notFound.map(id => `\`${id}\``).join(', ')}`;
+
+      await message.reply(replyMsg.trim() || 'No valid channels provided.');
+    } catch (err) {
+      console.error('remfav error:', err);
+      await message.reply('An error occurred while removing favorites.');
+    }
+  }
 });
