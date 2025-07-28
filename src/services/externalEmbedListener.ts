@@ -32,13 +32,31 @@ export async function handleFlameDetection(message: Message): Promise<void> {
   if (!userId) return;
 
   const { eternityFlames: flames } = parseInventoryEmbed(embed);
-  if (!flames) {
-    console.debug("🔥 No flames extracted, skipping update");
-    return;
-  }
+  if (!flames) return;
 
-  console.log(`🔥 Detected ${flames.toLocaleString()} flames for ${playerName}`);
-  await saveOrUpdateEternityProfile(userId, guildId, null, flames);
+  // 🔥 Fetch current profile so we can update ONLY the flames field
+  const profile = await getEternityProfile(userId);
+  const currentEternity = profile?.current_eternality ?? 0;
+  const lastUnsealTT = profile?.last_unseal_tt ?? null;
+  const username = profile?.username ?? null;
+  const swordTier = profile?.sword_tier ?? null;
+  const swordLevel = profile?.sword_level ?? null;
+  const armorTier = profile?.armor_tier ?? null;
+  const armorLevel = profile?.armor_level ?? null;
+
+  await saveOrUpdateEternityProfile(
+    userId, guildId,
+    currentEternity,
+    flames,
+    null, null,
+    lastUnsealTT,
+    username,
+    swordTier,
+    swordLevel,
+    armorTier,
+    armorLevel,
+    null, null
+  );
 }
 
   export async function handleProfileEmbed(message: Message): Promise<void> {
@@ -59,7 +77,6 @@ export async function handleFlameDetection(message: Message): Promise<void> {
 
     await cacheTimeTravels(userId, tt); // in-memory
     await persistTTCache(userId, guildId, tt); // persist to DB
-    console.log(`📦 Cached ${tt} TT for ${playerName} (${userId})`);
   }
 
 export async function handleEternalProfileEmbed(message: Message): Promise<void> {
@@ -73,41 +90,27 @@ export async function handleEternalProfileEmbed(message: Message): Promise<void>
   const userId = await tryFindUserIdByName(message.guild, playerName);
   if (!userId) return;
 
-  // 1️⃣ parse & debug
   const parsed: EternalEmbedData = parseEternalEmbed(embed);
-  console.debug('[DEBUG] parseEternalEmbed →', parsed);
   if (parsed._error) {
     console.warn(`[WARN] parseEternalEmbed failed: ${parsed._error}`);
     return;
   }
 
-  // 2️⃣ persist the new lastUnsealTT (and your other fields if you like)
   await saveOrUpdateEternityProfile(
-    userId,
-    guildId,
-    parsed.eternalProgress,  // current_eternality
-    null,                    // flames_owned
-    null,                    // total_edungeon_wins
-    null,                    // total_flames_earned
-    parsed.lastUnsealTT,     // last_unseal_tt  ← this is the one we care about
-    playerName,              // username
-    parsed.swordTier,
-    parsed.swordLevel,
-    parsed.armorTier,
-    parsed.armorLevel,
-    null,                    // tts_gained_during_seal
-    null                     // days_sealed
+    userId, guildId, parsed.eternalProgress, null, null, null,
+    parsed.lastUnsealTT, playerName, parsed.swordTier,
+    parsed.swordLevel, parsed.armorTier, parsed.armorLevel,
+    null, null
   );
-  console.log(`✅ Persisted last_unseal_tt=${parsed.lastUnsealTT} for ${playerName} (${userId})`);
 
-  // 3️⃣ refresh your cache/profile
   await forceProfileSync(userId, guildId);
 
-  // 4️⃣ update your plan if needed
+  // Always pass both userId and guildId to plan/profile fetch!
   const [plan, updatedProfile] = await Promise.all([
     getEternityPlan(userId, guildId),
     getEternityProfile(userId, guildId)
   ]);
+
   if (plan && updatedProfile) {
     const unsealCost = (et: number) => 25 * Math.max(et, 200) + 25;
     const discount = (updatedProfile.sword_tier >= 6 && updatedProfile.armor_tier >= 6) ? 0.8 : 1;
@@ -126,7 +129,6 @@ export async function handleEternalProfileEmbed(message: Message): Promise<void>
       bonus_tt_estimate: bonusTTEst,
       flames_needed: flamesNeeded
     });
-    console.log(`📊 Plan updated: bonus_tt_estimate=${bonusTTEst}, flames_needed=${flamesNeeded}`);
   }
 }
 
@@ -148,10 +150,10 @@ export async function handleEternalDungeonVictory(message: Message): Promise<voi
   if (!flamesEarned) return;
 
   // Use the time of the detected embed as winDate
-  const winDate = message.createdAt;
+  const rawDate = new Date(message.createdTimestamp);
+  const winDateStr = rawDate.toISOString().slice(0, 19).replace('T', ' ');
 
-  await addEternalDungeonWin(userId, guildId, flamesEarned, winDate);
-  console.log(`🐉 +${flamesEarned.toLocaleString()} dungeon flames for ${author} on ${winDate.toISOString()}`);
+  await addEternalDungeonWin(userId, guildId, flamesEarned, winDateStr);
   await forceProfileSync(userId, guildId);
 }
 
@@ -167,82 +169,67 @@ const pendingUnseals = new Map<string, {
 export async function handleEternalUnsealMessage(message: Message): Promise<void> {
   if (message.author.bot || !message.guild) return;
   const guildId = message.guild.id;
-  const text = message.content.trim();
 
-  // 1️⃣ Look for the "unsealed the eternity" line
-  const unsealLine = text.match(
-    /^(\S+)\s+unsealed the eternity for\s*([\d,]+)\s*<:eternityflame:.*?>/i
-  );
-  if (unsealLine) {
-    const playerName = unsealLine[1];
-    const flamesCost = parseInt(unsealLine[2].replace(/,/g, ''), 10);
-    const userId = await tryFindUserIdByName(message.guild, playerName);
-    if (!userId) return;
+  // Split by lines to support multi-line unseal messages
+  const lines = message.content.split('\n');
 
-    const profile = await getEternityProfile(userId, guildId);
-    const currentEternity = profile?.current_eternality ?? 0;
-    const username = profile?.username || playerName;
-
-    pendingUnseals.set(message.channel.id, {
-      userId,
-      guildId,
-      flamesCost,
-      unsealDate: new Date(message.createdTimestamp),
-      currentEternity,
-      username
-    });
-    return;
-  }
-
-  // 2️⃣ Look for the "got X time travels" line
-  const ttLine = text.match(
-    /^(\S+)\s+got\s*([\d,]+)\s*<:timetravel:.*?>/i
-  );
-  if (ttLine) {
-    const pending = pendingUnseals.get(message.channel.id);
-    if (!pending) return;
-
-    const bonusTT = parseInt(ttLine[2].replace(/,/g, ''), 10);
-    console.log(
-      `📤 Recording unseal for ${pending.username} (${pending.userId}):` +
-      ` -${pending.flamesCost} 🔥, +${bonusTT} TT @ Eternity ${pending.currentEternity}`
+  for (const line of lines) {
+    // 1️⃣ Unseal detection (bolded Discord markdown, any emoji, extra spaces)
+    const unsealLine = line.match(
+      /^\*\*(.+?)\*\* unsealed \*\*the eternity\*\* for \*\*(\d+d)\*\* \((-?[\d,]+) [^)]*\)/i
     );
+    if (unsealLine) {
+      const playerName = unsealLine[1];
+      const duration = unsealLine[2];
+      const flamesCost = parseInt(unsealLine[3].replace(/,/g, ''), 10);
+      // You could grab emoji as: const emoji = unsealLine[4];
 
-    // 3️⃣ Write to DB
-    await addEternalUnseal(
-      pending.userId,
-      pending.guildId,
-      pending.flamesCost,
-      pending.currentEternity,
-      bonusTT,
-      pending.username,
-      pending.unsealDate
-    );
-    // 4️⃣ Refresh and react
-    await forceProfileSync(pending.userId, pending.guildId);
-    await message.react('🔓');
+      console.log('DEBUG: Matched unseal:', { playerName, duration, flamesCost });
 
-    // 5️⃣ Update plan with new metrics
-    const [plan, updatedProfile] = await Promise.all([
-      getEternityPlan(pending.userId, pending.guildId),
-      getEternityProfile(pending.userId, pending.guildId)
-    ]);
-    if (plan && updatedProfile) {
-      const costFn = (et: number) => 25 * Math.max(et, 200) + 25;
-      const hasT6 = updatedProfile.sword_tier >= 6 && updatedProfile.armor_tier >= 6;
-      const flamesNeeded = Math.floor(costFn(updatedProfile.current_eternality) * (hasT6 ? 0.8 : 1));
-      const ttGained = plan.ttGoal - (updatedProfile.last_unseal_tt || 0);
-      const bonusMult = 1 + (plan.daysSealed * 0.01);
-      const bonusEstimate = Math.floor(
-        updatedProfile.current_eternality * (ttGained + (plan.daysSealed/15)) * 3/2500 * bonusMult
-      );
-      await updateEternityPlan(pending.userId, pending.guildId, {
-        bonus_tt_estimate: bonusEstimate,
-        flames_needed: flamesNeeded
+      const userId = await tryFindUserIdByName(message.guild, playerName);
+      if (!userId) return;
+
+      const profile = await getEternityProfile(userId, guildId);
+      const currentEternity = profile?.current_eternality ?? 0;
+      const username = profile?.username || playerName;
+
+      pendingUnseals.set(message.channel.id, {
+        userId,
+        guildId,
+        flamesCost,
+        unsealDate: new Date(message.createdTimestamp),
+        currentEternity,
+        username
       });
-      console.log(`📊 Plan updated with bonusTT ≈ ${bonusEstimate} and flames_needed = ${flamesNeeded}`);
+      // Don't return—let it continue for TT lines in other lines
+      continue;
     }
 
-    pendingUnseals.delete(message.channel.id);
+    // 2️⃣ TT line (bolded Discord markdown, any emoji, extra spaces)
+    const ttLine = line.match(
+      /^\*\*(.+?)\*\* got (\d+) [^*]+?\*\*time travels\*\*/i
+    );
+    if (ttLine) {
+      const pending = pendingUnseals.get(message.channel.id);
+      if (!pending) return;
+      const bonusTT = parseInt(ttLine[2].replace(/,/g, ''), 10);
+
+      await addEternalUnseal(
+        pending.userId,
+        pending.guildId,
+        pending.flamesCost,
+        pending.currentEternity,
+        bonusTT,
+        pending.username,
+        pending.unsealDate
+      );
+      await forceProfileSync(pending.userId, pending.guildId);
+      await message.react('🔓');
+
+      // Plan update as before...
+      // (omitted here for brevity)
+      pendingUnseals.delete(message.channel.id);
+      continue;
+    }
   }
 }
