@@ -1,3 +1,5 @@
+// src/channel_favs-prefix.ts
+
 import { Message, EmbedBuilder } from "discord.js";
 import { PrefixCommand } from '../../handler';
 const {checkfav, favChannels} = require('/home/ubuntu/ep_bot/extras/functions');

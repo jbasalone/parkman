@@ -1,3 +1,5 @@
+// src/remfav-prefix.ts
+
 import { Message } from "discord.js";
 import { PrefixCommand } from '../../handler';
 const {checkfav, remfav} = require('/home/ubuntu/ep_bot/extras/functions');

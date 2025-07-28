@@ -1,3 +1,5 @@
+// src/addfav-prefix.ts
+
 import { Message, EmbedBuilder } from "discord.js";
 import { PrefixCommand } from '../../handler';
 const {checkfav, addfav} = require('/home/ubuntu/ep_bot/extras/functions');
