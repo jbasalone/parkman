@@ -1,3 +1,5 @@
+// src/addfav-prefix.ts
+
 import { Message, EmbedBuilder } from "discord.js";
 import { PrefixCommand } from '../../handler';
 const {checkfav, addfav} = require('/home/ubuntu/ep_bot/extras/functions');
@@ -17,53 +19,54 @@ export default new PrefixCommand({
 		'871393325389844521' // Luminescent Leiutenint
 
 	],
-    async execute(message: Message): Promise<void> {
+  async execute(message: Message): Promise<void> {
+    try {
+      const user = message.author.id;
+      const messageContent = message.content.trim().split(/\s+/);
 
-	try{
-	    let messageContent = message.content
-	    let channelName;
-	    let digitRegex = new RegExp(/^(?:[+-]?(?=\.\d|\d)(?:\d+)?(?:\.?\d*)(?:[eE][+-]?\d+)?)$/g)
-	    let digitChannel = [...messageContent.matchAll(digitRegex)] 
-	    if (messageContent.includes('https')) {
-		    let regex = new RegExp(/()\d+$/)
-		    channelName = messageContent.match(regex) 
-	    }else if(digitChannel[0]){
-		    channelName = digitChannel[0]
-	    }else if(message.mentions.channels.map(m => m).length) {
-		    channelName = message.mentions.channels.first()
-	    }
-	
-	    channelName = String(channelName).replace(/\D/g, '');
+      // 1. Gather all mentioned channels
+      const mentionedIds = message.mentions.channels.map(ch => ch.id);
 
-	    let user = message.author.id
-	    let channelList = ''
-	
-	    const favoritedChannels = await checkfav(message.author.id);
-	    
-	    if(favoritedChannels === false ){
-		await addfav(user,channelName)
-		channelList = `${channelName}`
-		// avoid a race condition
-		let NewChannelEmbed1 = new EmbedBuilder()
-                	.setTitle("Quick Channel List")
-                	.setFooter({text:message.author.tag, iconURL:message.author.displayAvatarURL()})
-                	.setTimestamp()
-                	.setColor('#097969')
-                	.setDescription(`${channelList}`);
-		await message.reply({embeds:[NewChannelEmbed1]})
-		return;
-	    }
-	    const isFavorite = favoritedChannels.some((fav) => fav.channel === channelName)
-	    if(isFavorite) {
-		    await message.reply('You already have this channel as a favorite')
-		    return;
-	    } else {
-	    	await addfav(user,channelName)
-		await message.reply(`<#${channelName}> added!`)
-	    }
+      // 2. Gather all raw numeric IDs (skip prefix/command)
+      const rawIds = messageContent
+        .filter(part => /^\d{17,19}$/.test(part))
+        .filter(id => !mentionedIds.includes(id));
 
+      // 3. Combine, dedupe
+      const allChannelIds = [...new Set([...mentionedIds, ...rawIds])];
 
-	  }catch(err)
-         {console.log(err)}
-    },
+      if (!allChannelIds.length) {
+        await message.reply('Please mention at least one channel or provide channel IDs to add.');
+        return;
+      }
+
+      // 4. Check which are already favorited
+      const favoritedChannels = await checkfav(user);
+      const favSet = new Set(favoritedChannels.map(fav => fav.channel));
+
+      const added = [];
+      const already = [];
+
+      for (const channelId of allChannelIds) {
+        if (favSet.has(channelId)) {
+          already.push(channelId);
+        } else {
+          await addfav(user, channelId);
+          added.push(channelId);
+        }
+      }
+
+      let replyMsg = '';
+      if (added.length)
+        replyMsg += `✅ Added: ${added.map(id => `<#${id}> (\`${id}\`)`).join(', ')}\n`;
+      if (already.length)
+        replyMsg += `⚠️ Already favorited: ${already.map(id => `<#${id}> (\`${id}\`)`).join(', ')}`;
+
+      await message.reply(replyMsg.trim() || 'No valid channels provided.');
+
+    } catch (err) {
+      console.error('addfav error:', err);
+      await message.reply('An error occurred while adding favorites.');
+    }
+  }
 });

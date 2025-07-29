@@ -1,3 +1,5 @@
+// src/channel_favs-prefix.ts
+
 import { Message, EmbedBuilder } from "discord.js";
 import { PrefixCommand } from '../../handler';
 const {checkfav, favChannels} = require('/home/ubuntu/ep_bot/extras/functions');
@@ -18,32 +20,57 @@ export default new PrefixCommand({
 		"1130783135156670504", // Luminescent Users
 		'871393325389844521' // Luminescent Leiutenint
 	],
-    async execute(message: Message): Promise<void> {
-	try{
-	    const channelFavs = await checkfav(message.author.id)
-	    if (!channelFavs.length) {
-		let embed1 = new EmbedBuilder()
-                .setFooter({text:message.author.tag, iconURL:message.author.displayAvatarURL()})
-		.setTimestamp()
-		.setColor('#097969')
-                .setFields({name: "Want to add a channel to this list?", value:"Type `ep addfav`"})
-		.setDescription(`Channel List\n\nYou do not have any favorite channel.`)
-        		await message.reply({embeds:[embed1]})
-		    	return;
-	    }
-	    let channelList = " "
-	    for (let i = 0; i < channelFavs.length; i++) {
-		channelList = await channelList.concat(`\n ${i+1} <#${channelFavs[i].channel}>`)
-	    }
-				
-	    let embed2 =  new EmbedBuilder()
-		    .setTitle("Quick Channel List")
-		    .setFooter({text:message.author.tag, iconURL:message.author.displayAvatarURL()})
-                    .setTimestamp()
-                    .setColor('#097969')
-		    .setDescription(`${channelList}`);
-	   await message.reply({embeds:[embed2]})
-	}catch(err)
-  	{console.log(err)}
+  async execute(message: Message): Promise<void> {
+    try {
+      const channelFavs = await checkfav(message.author.id);
+
+      // Bulletproof: Only keep valid channel IDs (17-19 digit strings)
+      const filteredFavs = (channelFavs || []).filter(f =>
+        f && typeof f.channel === 'string' && /^\d{17,19}$/.test(f.channel)
+      );
+
+      if (!filteredFavs.length) {
+        const embed1 = new EmbedBuilder()
+          .setFooter({ text: message.author.tag, iconURL: message.author.displayAvatarURL() })
+          .setTimestamp()
+          .setColor('#097969')
+          .setFields({ name: "Want to add a channel to this list?", value: "Type `ep addfav`" })
+          .setDescription(`Channel List\n\nYou do not have any favorite channels.`);
+        await message.reply({ embeds: [embed1] });
+        return;
+      }
+
+      let channelList = "";
+      for (let i = 0; i < filteredFavs.length; i++) {
+        const id = filteredFavs[i].channel;
+        let found = false;
+        // Check all guilds bot is in (in case channel is not in current guild)
+        for (const guild of message.client.guilds.cache.values()) {
+          if (guild.channels.cache.has(id)) {
+            found = true;
+            break;
+          }
+        }
+        if (found) {
+          channelList += `\n${i + 1}. <#${id}>`;
+        } else {
+          channelList += `\n${i + 1}. [deleted/inaccessible] Channel ID: \`${id}\``;
+        }
+      }
+
+      channelList += `\n\n*To remove a missing favorite, use \`ep remfav [channelid]\`*`;
+
+      const embed2 = new EmbedBuilder()
+        .setTitle("Your Favorite Channels")
+        .setFooter({ text: message.author.tag, iconURL: message.author.displayAvatarURL() })
+        .setTimestamp()
+        .setColor('#097969')
+        .setDescription(channelList);
+
+      await message.reply({ embeds: [embed2] });
+    } catch (err) {
+      console.error('favs error:', err);
+      await message.reply('An error occurred while listing your favorites.');
     }
+  }
 });
