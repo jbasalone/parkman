@@ -24,20 +24,25 @@ export default new PrefixCommand({
     try {
       const channelFavs = await checkfav(message.author.id);
 
-      if (!channelFavs.length) {
+      // Bulletproof: Only keep valid channel IDs (17-19 digit strings)
+      const filteredFavs = (channelFavs || []).filter(f =>
+        f && typeof f.channel === 'string' && /^\d{17,19}$/.test(f.channel)
+      );
+
+      if (!filteredFavs.length) {
         const embed1 = new EmbedBuilder()
-          .setFooter({text: message.author.tag, iconURL: message.author.displayAvatarURL()})
+          .setFooter({ text: message.author.tag, iconURL: message.author.displayAvatarURL() })
           .setTimestamp()
           .setColor('#097969')
-          .setFields({name: "Want to add a channel to this list?", value:"Type `ep addfav`"})
+          .setFields({ name: "Want to add a channel to this list?", value: "Type `ep addfav`" })
           .setDescription(`Channel List\n\nYou do not have any favorite channels.`);
-        await message.reply({embeds: [embed1]});
+        await message.reply({ embeds: [embed1] });
         return;
       }
 
       let channelList = "";
-      for (let i = 0; i < channelFavs.length; i++) {
-        const id = channelFavs[i].channel;
+      for (let i = 0; i < filteredFavs.length; i++) {
+        const id = filteredFavs[i].channel;
         let found = false;
         // Check all guilds bot is in (in case channel is not in current guild)
         for (const guild of message.client.guilds.cache.values()) {
@@ -47,9 +52,9 @@ export default new PrefixCommand({
           }
         }
         if (found) {
-          channelList += `\n${i+1}. <#${id}>`;
+          channelList += `\n${i + 1}. <#${id}>`;
         } else {
-          channelList += `\n${i+1}. [deleted/inaccessible] Channel ID: \`${id}\``;
+          channelList += `\n${i + 1}. [deleted/inaccessible] Channel ID: \`${id}\``;
         }
       }
 
@@ -57,13 +62,13 @@ export default new PrefixCommand({
 
       const embed2 = new EmbedBuilder()
         .setTitle("Your Favorite Channels")
-        .setFooter({text: message.author.tag, iconURL: message.author.displayAvatarURL()})
+        .setFooter({ text: message.author.tag, iconURL: message.author.displayAvatarURL() })
         .setTimestamp()
         .setColor('#097969')
         .setDescription(channelList);
 
-      await message.reply({embeds: [embed2]});
-    } catch(err) {
+      await message.reply({ embeds: [embed2] });
+    } catch (err) {
       console.error('favs error:', err);
       await message.reply('An error occurred while listing your favorites.');
     }
