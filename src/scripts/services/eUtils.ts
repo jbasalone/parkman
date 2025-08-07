@@ -54,9 +54,11 @@ export function parseEternalEmbed(embed: any): EternalEmbedData {
   const equipField    = embed.fields.find((f: any) => f.name.toLowerCase().includes('eternal equipment'))?.value || '';
 
   // E-AT, E-DEF, E-LIFE
-  const statsMatch    = statsField.match(/E-AT\*\*:\s*(\d+).*?E-DEF\*\*:\s*(\d+).*?E-LIFE\*\*:\s*(\d+)/s);
-  // Eternality and Last unseal time travels
-  const progMatch     = progressField.match(/\*\*Eternality\*\*:\s*(\d+).*?\*\*Last unseal time travels\*\*:\s*(\d+)/is);
+  const statsMatch    = statsField.match(/E-AT\*\*:\s*([\d,]+).*?E-DEF\*\*:\s*([\d,]+).*?E-LIFE\*\*:\s*([\d,]+)/s);
+
+  // Eternality and Last unseal time travels (fix: commas)
+  const progMatch     = progressField.match(/\*\*Eternality\*\*:\s*([\d,]+).*?\*\*Last unseal time travels\*\*:\s*([\d,]+)/is);
+
   // sword tier/level
   const swordMatch    = equipField.match(/sword.*?\|\s*T(\d+)\s*Lv(\d+)/i);
   // armor tier/level
@@ -73,11 +75,11 @@ export function parseEternalEmbed(embed: any): EternalEmbedData {
   }
 
   return {
-    eternalAT:        parseInt(statsMatch[1], 10),
-    eternalDEF:       parseInt(statsMatch[2], 10),
-    eternalLIFE:      parseInt(statsMatch[3], 10),
-    eternalProgress:  parseInt(progMatch[1],  10),
-    lastUnsealTT:     parseInt(progMatch[2],  10),
+    eternalAT:        parseInt(statsMatch[1].replace(/,/g, ''), 10),
+    eternalDEF:       parseInt(statsMatch[2].replace(/,/g, ''), 10),
+    eternalLIFE:      parseInt(statsMatch[3].replace(/,/g, ''), 10),
+    eternalProgress:  parseInt(progMatch[1].replace(/,/g, ''), 10),
+    lastUnsealTT:     parseInt(progMatch[2].replace(/,/g, ''), 10),
     swordTier:        swordMatch ? parseInt(swordMatch[1], 10) : 0,
     swordLevel:       swordMatch ? parseInt(swordMatch[2], 10) : 0,
     armorTier:        armorMatch ? parseInt(armorMatch[1], 10) : 0,

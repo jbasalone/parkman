@@ -46,11 +46,11 @@ const EPIC_RPG_ID             = '555955826880413696';
 
 // When doing your very first backfill, start *after* this message ID.
 // On subsequent runs, the script will load per‐channel cursors from LAST_IDS_FILE.
-const START_AFTER_ID          = '1375984017446535200';
+const START_AFTER_ID          = '1398882242864087061';
 
 // Categories (by ID or lowercase name) in which “unseal” messages appear:
 const ALLOWED_CATEGORY_IDS    = new Set<string>([
-  // '1140190313915371530',
+  '1140190313915371530',
   '1152913513598173214',
   '1137026511921229905',
   '1147909067172483162',
@@ -223,21 +223,24 @@ async function scanChannel(
       if (msg.author.id !== EPIC_RPG_ID) continue;
       const lines = msg.content.split('\n');
       for (const line of lines) {
-        // 1️⃣ Unseal line (Discord markdown)
         const unsealLine = line.match(
-          /^\*\*(.+?)\*\* unsealed \*\*the eternity\*\* for \*\*(\d+d)\*\* \((-?[\d,]+)[^)]*\)/i
+          /(\*{2})?(.+?)\*{2}?\s*unsealed\s*(\*{2})?the eternity\*{2}?\s*for\s*(\*{2})?(\d+d)\*{2}?\s*\(\s*(-?[\d,]+)[^\)]*\)/i
         );
         if (unsealLine) {
-          const playerName = unsealLine[1];
-          const duration = unsealLine[2];
-          const flamesCost = parseInt(unsealLine[3].replace(/,/g, ''), 10);
+          const playerName = unsealLine[2];
+          const duration = unsealLine[5];
+          const flamesCost = parseInt(unsealLine[6].replace(/,/g, ''), 10);
           console.log('DEBUG: Matched unseal:', { playerName, duration, flamesCost });
 
           const userId = await tryFindUserIdByName(msg.guild!, playerName);
           if (!userId || !knownUserIds.has(userId)) continue;
 
           const profile = await getEternityProfile(userId, guild.id);
-          const currentEternity = profile?.current_eternality ?? 0;
+          // If there’s no profile or the value is suspicious, use null
+          let currentEternity = null;
+          if (profile && typeof profile.current_eternality === 'number' && profile.current_eternality > 1) {
+            currentEternity = profile.current_eternality;
+          }
           const username = profile?.username || playerName;
 
           pendingUnseals.set(msg.channel.id, {
@@ -251,13 +254,13 @@ async function scanChannel(
           continue;
         }
 
-        // 2️⃣ TT line (Discord markdown)
         const ttLine = line.match(
-          /^\*\*(.+?)\*\* got (\d+) [^*]+?\*\*time travels\*\*/i
+          /(\*{2})?(.+?)\*{2}?\s*got\s*([\d,]+)[^\n]*?(?:\*{2})?\s*time travels\*{2}?/i
         );
         if (ttLine) {
           const pending = pendingUnseals.get(msg.channel.id);
           if (!pending) continue;
+          const playerName = ttLine[2];
           const bonusTT = parseInt(ttLine[2].replace(/,/g, ''), 10);
 
           console.log(

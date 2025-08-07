@@ -95,6 +95,7 @@ export async function handleEternalProfileEmbed(message: Message): Promise<void>
     console.warn(`[WARN] parseEternalEmbed failed: ${parsed._error}`);
     return;
   }
+  console.log("[DEBUG] Eternity parsed:", parsed);
 
   await saveOrUpdateEternityProfile(
     userId, guildId, parsed.eternalProgress, null, null, null,
