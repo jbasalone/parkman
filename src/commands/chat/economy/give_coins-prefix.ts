@@ -26,6 +26,8 @@ export default new PrefixCommand({
         if(message.channel.type !== ChannelType.GuildText) return;
         const channel = message.channel.id;
         const serverId = message.guild.id;
+        //Will this get the args removing the name of the command.
+        //It will remove the give c?
         const args = message.content.trim().split(/\s+/).slice(2);
 
         //TODO can we have a role for economy manager?
@@ -35,6 +37,7 @@ export default new PrefixCommand({
             "839731097473908767": "845499229429956628", // blackstone staff royal guards
             "871269916085452870": "871393325389844521", // Luminescent Staff
         };
+        //Get user staff
         let checkUserStaff = await  message.guild.members.cache.get(message.author.id)
         const managersRole = Object.entries(modRoleList).find(([key, val]) => key === serverId)?.[1];
 
