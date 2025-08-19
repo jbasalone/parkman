@@ -5,8 +5,8 @@ import { PrefixCommand } from "../../../handler";
 import { Message } from 'discord.js';
 
 export default new PrefixCommand({
-    name: "give coins",
-    aliases: ["give c", "g c"],
+    name: "remove coins",
+    aliases: ["remove c", "r c"],
     allowedGuilds: ['1135995107842195550'],
     allowedRoles: ['1147864509344661644', '1148992217202040942', '1147864509344661644'],
     allowedCategories: [
@@ -60,7 +60,7 @@ export default new PrefixCommand({
             return;
         }
         if (userId === message.author.id) {
-            await message.reply('You can give coins to yourself, just not this way');
+            await message.reply('You can remove coins from  yourself, just not this way');
             return;
         }
         let coins = 0;
@@ -72,9 +72,9 @@ export default new PrefixCommand({
         }
 
         let currentCoins = await getUserCoins(userId);
-        currentCoins = currentCoins + coins
-        //TODO need a addCoinsUser(userId,coins)
-        await message.reply(`${coins} coins has been given to <@${userId}`);
+        currentCoins = currentCoins - coins
+        //TODO need a remove(userId,coins)
+        await message.reply(`${coins} coins has been removed from <@${userId}`);
 
     }
 });
