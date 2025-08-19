@@ -28,7 +28,8 @@ export default new PrefixCommand({
         const serverId = message.guild.id;
         //Will this get the args removing the name of the command.
         //It will remove the give c?
-        const args = message.content.trim().split(/\s+/).slice(2);
+        const commandBody = message.content.trim().replace(this.name,'').replace(this.aliases[0],'').replace(this.aliases[1],'')
+        const args = commandBody.split(/\s+/).slice(2);
 
         //TODO can we have a role for economy manager?
         const modRoleList: { [key: string]: string } = {
