@@ -1,5 +1,5 @@
 const { getShopItem, getUserCoins, removeUserCoins } = require('/home/ubuntu/ep_bot/extras/functions');
-import { PrefixCommand } from "../../handler";
+import { PrefixCommand } from "../../../handler";
 import { Message } from 'discord.js';
 
 export default new PrefixCommand({

@@ -1,5 +1,5 @@
 const { getUserCoins } = require('/home/ubuntu/ep_bot/extras/functions');
-import { PrefixCommand } from "../../handler";
+import { PrefixCommand } from "../../../handler";
 import { Message } from 'discord.js';
 
 export default new PrefixCommand({
@@ -21,6 +21,8 @@ export default new PrefixCommand({
 
   ],
   async execute(message: Message): Promise<void> {
+
+    //TODO will the coins be something server?
       const coins = await getUserCoins(message.author.id);
       await message.reply(`You have **${coins}** coins!`);
     }
